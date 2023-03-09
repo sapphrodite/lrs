@@ -71,13 +71,13 @@ public:
     // todo - both of these functions need better names
     size_t find_spot() {
         if (this->first_free_id() == this->data.size()) {
-            set_capacity(this->data.size() * 2);
+            set_capacity(this->data.size() * 2 + 1);
         }
         return this->first_free_id();
     }
-    size_t insert(const element& e) {
+    size_t insert_any(const element& e) {
         size_t spot = find_spot();
-        this->data[spot] = e;
+        (*this).insert(spot, e);
         return spot;
     }
 };

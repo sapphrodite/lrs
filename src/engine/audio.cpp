@@ -2,20 +2,15 @@
 #include <SDL2/SDL.h>
 #include <opus/opus.h>
 #include <common/assertion.h>
+#include <common/marked_array.h>
 #include <common/raii_types.h>
-#include "audio.h"
+#include "modules.h"
 
 #include <fstream>
 #include <cassert>
 #include <cstring> // memcpy
 
 namespace audio {
-
-
-    ////////////////////////////////
-    ///     OGG FILE READING     ///
-    ////////////////////////////////
-
 
     struct packet {
         unsigned char* data;
@@ -24,80 +19,111 @@ namespace audio {
 
     class ogg_context : public no_copy, no_move {
     public:
-        ogg_context(std::string filename);
-        ~ogg_context();
-        packet read_packet(); // Read a packet from the ogg stream
+        ogg_context(std::string filename) : file(filename, std::ios::in | std::ios::binary) {
+            if (!file.is_open()) {
+                throw std::runtime_error("File not found");
+            }
+            int ret = ogg_sync_init(&state);
+            assert(ret == 0);
+            // Requesting a packet before reading a page in causes a segfault.
+            // The first page contains the header, which is ignored by the rest of this code.
+            read_page();
+        }
+        ~ogg_context() {
+            ogg_sync_clear(&state);
+            ogg_stream_clear(&streamstate);
+        }
+        packet read_packet() { // Read a packet from the ogg stream
+            ogg_packet p;
+            int ret = ogg_stream_packetout(&streamstate, &p);
+            while (ret == 0) {
+                read_page();
+                ret = ogg_stream_packetout(&streamstate, &p);
+                if (eof()) break;
+            }
+            if (ret != 1)  return packet{nullptr, 0};
+            return packet{p.packet, p.bytes};
+        }
         bool eof() { return file.gcount() == 0; }
     private:
-        void read_page(); // Read an ogg page from disk into memory
         std::ifstream file;
         ogg_sync_state state;
         ogg_stream_state streamstate;
         int _unread_packets = 0;
-    };
 
-    ogg_context::ogg_context(std::string filename) : file(filename, std::ios::in | std::ios::binary) {
-        if (!file.is_open()) {
-            throw std::runtime_error("File not found");
-        }
-        int ret = ogg_sync_init(&state);
-        assert(ret == 0);
-        // Requesting a packet before reading a page in causes a segfault.
-        // The first page contains the header, which is ignored by the rest of this code.
-        read_page();
-    }
-
-    ogg_context::~ogg_context() {
-        ogg_sync_clear(&state);
-        ogg_stream_clear(&streamstate);
-    }
-
-    void ogg_context::read_page() {
-        ogg_page page;
-        int total_bytes = 0;
-        while(ogg_sync_pageout(&state, &page) != 1) {
-            char* buffer = ogg_sync_buffer(&state, 4096);
-            file.read(buffer, 4096);;
-            int bytes = file.gcount();
-            total_bytes += bytes;
-            ogg_sync_wrote(&state, bytes);
-            if (bytes == 0) {
-                break;
+        void read_page() { // Read an ogg page from disk into memory
+            ogg_page page;
+            int total_bytes = 0;
+            while(ogg_sync_pageout(&state, &page) != 1) {
+                char* buffer = ogg_sync_buffer(&state, 4096);
+                file.read(buffer, 4096);;
+                int bytes = file.gcount();
+                total_bytes += bytes;
+                ogg_sync_wrote(&state, bytes);
+                if (bytes == 0) {
+                    break;
+                }
             }
+
+            if (total_bytes == 0)
+                return;
+
+            if (ogg_page_bos(&page)) {
+                int serial = ogg_page_serialno(&page);
+                ogg_stream_init(&streamstate, serial);
+            }
+
+            int ret = ogg_stream_pagein(&streamstate, &page);
+            assert(ret == 0);
+            _unread_packets += ogg_page_packets(&page);
         }
-
-        if (total_bytes == 0)
-            return;
-
-        if (ogg_page_bos(&page)) {
-            int serial = ogg_page_serialno(&page);
-            ogg_stream_init(&streamstate, serial);
-        }
-
-        int ret = ogg_stream_pagein(&streamstate, &page);
-        assert(ret == 0);
-        _unread_packets += ogg_page_packets(&page);
-    }
-
-    packet ogg_context::read_packet() {
-        ogg_packet p;
-        int ret = ogg_stream_packetout(&streamstate, &p);
-        while (ret == 0) {
-            read_page();
-            ret = ogg_stream_packetout(&streamstate, &p);
-            if (eof()) break;
-        }
-        if (ret != 1)  return packet{nullptr, 0};
-        return packet{p.packet, p.bytes};
-    }
+    };
 
 
     ///////////////////////////////////////////
     ///     AUDIO ENGINE IMPLEMENTATION     ///
     ///////////////////////////////////////////
+        class track {
+        public:
+            std::vector<sample> data;
+            sink_channel channel;
+        };
+        class stream {
+        public:
+            stream(const sample* data, size_t buffer_size, sink_channel channel);
+            stream() = default;
+            sample get_sample();
+            bool eos() const;
+            sink_channel channel();
+        private:
+            const sample* _data = nullptr;
+            sink_channel _channel;
+            size_t _buffer_size = 0;
+            size_t _tracker = 0;
+        };
+
+    class handle {
+    public:
+        marked_array<stream, 32> _active_tracks;
+        std::vector<track> tracks;
+        std::array<float, 3> _sink_volumes;
+        int _sample_rate;
+        uint8_t _num_channels;
+        int _device_id = 0;
+
+    void initialize(int sample_rate, output_mode nc);
+    void load_from_file(std::string filename, sink_channel channel);
+    void mix_audio(size_t num_samples);
+    stream_id play_track(size_t track_id);
+    void stop_stream(stream_id track);
+    void set_channel_volume(sink_channel channel, float volume) {
+        _sink_volumes[int(channel)] = (volume / 100.0);
+    }
+
+    };
 
 
-    void engine::initialize(int sample_rate, output_mode num_channels) {
+    void handle::initialize(int sample_rate, output_mode num_channels) {
         _sample_rate = sample_rate;
         _num_channels = int(num_channels);
         SDL_InitSubSystem(SDL_INIT_AUDIO);
@@ -111,7 +137,7 @@ namespace audio {
         SDL_PauseAudioDevice(_device_id, 0);
     };
 
-    void engine::load_from_file(std::string filename, sink_channel channel) {
+    void handle::load_from_file(std::string filename, sink_channel channel) {
         // No point abstracting over the opus decoder, as it's only used here
         int error = 0;
         OpusDecoder* decoder = opus_decoder_create(_sample_rate, int(_num_channels), &error);
@@ -151,7 +177,7 @@ namespace audio {
         }
     }
 
-    stream_id engine::play_track(size_t track_id) {
+    stream_id handle::play_track(size_t track_id) {
         assertion(track_id < tracks.size(), "Invalid track ID");
         auto& track_buffer = tracks[track_id];
         stream_id id = _active_tracks.first_free_id();
@@ -159,7 +185,7 @@ namespace audio {
         return id;
     }
 
-    void engine::mix_audio(size_t num_samples) {
+    void handle::mix_audio(size_t num_samples) {
         std::vector<sample> buffer = std::vector<sample>(num_samples * int(_num_channels));
         for (size_t i = 0; i < buffer.size(); i++) {
             float accumulator = 0;
@@ -176,15 +202,39 @@ namespace audio {
         SDL_QueueAudio(_device_id, buffer.data(), buffer.size() * sizeof(sample));
     }
 
-    void engine::stop_stream(stream_id track) { _active_tracks.remove(track); }
-    void engine::set_channel_volume(sink_channel channel, float volume) { _sink_volumes[int(channel)] = (volume / 100.0); }
+    void handle::stop_stream(stream_id track) { _active_tracks.remove(track); }
 
-    engine::stream::stream(const sample* data, size_t size, sink_channel channel) : _data(data), _buffer_size(size), _channel(channel) {}
-    bool engine::stream::eos() const { return _tracker >= _buffer_size; }
-    sink_channel engine::stream::channel() { return _channel; }
-    sample engine::stream::get_sample() {
+    stream::stream(const sample* data, size_t size, sink_channel channel) : _data(data), _buffer_size(size), _channel(channel) {}
+    bool stream::eos() const { return _tracker >= _buffer_size; }
+    sink_channel stream::channel() { return _channel; }
+    sample stream::get_sample() {
         sample s = _data[_tracker];
         _tracker++;
         return s;
+    }
+
+
+
+
+    handle* alloc() { return new handle; }
+    void free(handle* a) { delete a; }
+
+    void initialize(handle* a, int sample_rate, output_mode nc) {
+        a->initialize(sample_rate, nc);
+    }
+    void load_from_file(handle* a, std::string filename, sink_channel channel) {
+        a->load_from_file(filename, channel);
+    }
+    void mix_audio(handle* a, size_t num_samples) {
+        a->mix_audio(num_samples);
+    }
+    stream_id play_track(handle* a, size_t track_id) {
+        return a->play_track(track_id);
+    }
+    void stop_stream(handle* a, stream_id track) {
+        a->stop_stream(track);
+    }
+    void set_channel_volume(handle* a, sink_channel channel, float volume) {
+        a->set_channel_volume(channel, volume);
     }
 }

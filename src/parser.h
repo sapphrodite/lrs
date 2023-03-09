@@ -52,8 +52,8 @@ namespace dsl {
 
     class function : public object {
     public:
-        const char* read_command(size_t idx) { return data[idx].c_str(); }
-        size_t num_commands() { return data.size(); }
+        const char* read_command(size_t idx) const { return data[idx].c_str(); }
+        size_t num_commands() const { return data.size(); }
         void add_command(const std::string& str) { data.emplace_back(str); }
         bool is_primitive() const { return false; }
     private:

@@ -4,7 +4,7 @@ SOURCE_DIR := src/
 SOURCE_SUBDIRS := engine/
 INCLUDE_DIRS :=
 LIBS := SDL2 GLEW GL png ogg opus
-CXXFLAGS := --std=c++20 -Wall -Wextra -g3
+CXXFLAGS := --std=c++20 -Wall -Wextra -g3  -fsanitize=undefined -fsanitize=address 
 SUBMAKES :=
 TARGET_DEPS :=
 
@@ -14,6 +14,7 @@ CXXFLAGS += -MMD -MP -I$(SOURCE_DIR) $(addprefix -I, $(INCLUDE_DIRS))
 THIS_MAKEFILE := $(firstword $(MAKEFILE_LIST))
 SOURCE_DIRS := $(SOURCE_DIR) $(addprefix $(SOURCE_DIR), $(SOURCE_SUBDIRS))
 SOURCES := $(foreach d, $(SOURCE_DIRS), $(wildcard $(d)*.cpp))
+HEADERS := $(foreach d, $(SOURCE_DIRS), $(wildcard $(d)*.h))
 OBJECTS := $(patsubst $(SOURCE_DIR)%.cpp, $(BUILD_DIR)%.o, $(SOURCES))
 DEPFILES := $(patsubst %.o,%.d,$(OBJECTS))
 -include $(DEPFILES)
@@ -31,8 +32,12 @@ $(TARGET): $(OBJECTS)
 
 all: $(TARGET)
 
+docs:
+	SOURCES="$(SOURCES) $(HEADERS)" doxygen
+
 clean:
 	rm -rf $(TARGET)
 	rm -rf $(BUILD_DIR)
+	rm -rf docs
 
-.PHONY: clean all
+.PHONY: clean all docs

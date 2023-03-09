@@ -7,7 +7,7 @@ struct vec2 {
 };
 
 struct vertex {
-    vec2<float> pos;
+    vec2<uint16_t> pos = vec2<uint16_t>{0, 0};
     vec2<float> uv;
 };
 

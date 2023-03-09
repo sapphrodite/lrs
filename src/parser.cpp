@@ -185,6 +185,9 @@ namespace dsl {
             if (c == '}') {
                 discard_peek();
                 break;
+            } else if (c == '=') {
+                discard_peek();
+                skip_skippables();
             } else if (c == ';') {
                 discard_peek();
                 new_func->add_command(current_line);
@@ -262,6 +265,7 @@ namespace dsl {
             }
             array['-'] = byte_class::identifier;
             array['_'] = byte_class::identifier;
+            array['.'] = byte_class::identifier;
             array['$'] = byte_class::identifier;
             array[' '] = byte_class::skippable;
             array['#'] = byte_class::skippable;
