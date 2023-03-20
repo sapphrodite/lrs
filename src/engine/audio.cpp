@@ -10,7 +10,7 @@
 #include <cassert>
 #include <cstring> // memcpy
 
-namespace audio {
+    using sample = int16_t;
 
     struct packet {
         unsigned char* data;
@@ -102,7 +102,7 @@ namespace audio {
             size_t _tracker = 0;
         };
 
-    class handle {
+    class audio {
     public:
         marked_array<stream, 32> _active_tracks;
         std::vector<track> tracks;
@@ -123,7 +123,7 @@ namespace audio {
     };
 
 
-    void handle::initialize(int sample_rate, output_mode num_channels) {
+    void audio::initialize(int sample_rate, output_mode num_channels) {
         _sample_rate = sample_rate;
         _num_channels = int(num_channels);
         SDL_InitSubSystem(SDL_INIT_AUDIO);
@@ -137,7 +137,7 @@ namespace audio {
         SDL_PauseAudioDevice(_device_id, 0);
     };
 
-    void handle::load_from_file(std::string filename, sink_channel channel) {
+    void audio::load_from_file(std::string filename, sink_channel channel) {
         // No point abstracting over the opus decoder, as it's only used here
         int error = 0;
         OpusDecoder* decoder = opus_decoder_create(_sample_rate, int(_num_channels), &error);
@@ -177,7 +177,7 @@ namespace audio {
         }
     }
 
-    stream_id handle::play_track(size_t track_id) {
+    stream_id audio::play_track(size_t track_id) {
         assertion(track_id < tracks.size(), "Invalid track ID");
         auto& track_buffer = tracks[track_id];
         stream_id id = _active_tracks.first_free_id();
@@ -185,7 +185,7 @@ namespace audio {
         return id;
     }
 
-    void handle::mix_audio(size_t num_samples) {
+    void audio::mix_audio(size_t num_samples) {
         std::vector<sample> buffer = std::vector<sample>(num_samples * int(_num_channels));
         for (size_t i = 0; i < buffer.size(); i++) {
             float accumulator = 0;
@@ -202,7 +202,7 @@ namespace audio {
         SDL_QueueAudio(_device_id, buffer.data(), buffer.size() * sizeof(sample));
     }
 
-    void handle::stop_stream(stream_id track) { _active_tracks.remove(track); }
+    void audio::stop_stream(stream_id track) { _active_tracks.remove(track); }
 
     stream::stream(const sample* data, size_t size, sink_channel channel) : _data(data), _buffer_size(size), _channel(channel) {}
     bool stream::eos() const { return _tracker >= _buffer_size; }
@@ -216,25 +216,24 @@ namespace audio {
 
 
 
-    handle* alloc() { return new handle; }
-    void free(handle* a) { delete a; }
+    audio* audio_alloc() { return new audio; }
+    void audio_free(audio* a) { delete a; }
 
-    void initialize(handle* a, int sample_rate, output_mode nc) {
+    void initialize(audio* a, int sample_rate, output_mode nc) {
         a->initialize(sample_rate, nc);
     }
-    void load_from_file(handle* a, std::string filename, sink_channel channel) {
+    void load_from_file(audio* a, std::string filename, sink_channel channel) {
         a->load_from_file(filename, channel);
     }
-    void mix_audio(handle* a, size_t num_samples) {
+    void mix_audio(audio* a, size_t num_samples) {
         a->mix_audio(num_samples);
     }
-    stream_id play_track(handle* a, size_t track_id) {
+    stream_id play_track(audio* a, size_t track_id) {
         return a->play_track(track_id);
     }
-    void stop_stream(handle* a, stream_id track) {
+    void stop_stream(audio* a, stream_id track) {
         a->stop_stream(track);
     }
-    void set_channel_volume(handle* a, sink_channel channel, float volume) {
+    void set_channel_volume(audio* a, sink_channel channel, float volume) {
         a->set_channel_volume(channel, volume);
     }
-}

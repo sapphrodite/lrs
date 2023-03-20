@@ -1,4 +1,4 @@
-#include "modules.h"
+#include "engine.h"
 #include <GL/glew.h>
 #include <cstring> //memcpy
 
@@ -7,113 +7,161 @@
 #include <common/marked_array.h>
 
 
+struct spritedata {
+    std::vector<vertex> data;
+    uint32_t tex_id;
+};
 
 
-namespace renderer {
-
-    // it's possible to use the "use" function to abstract away normal/height map binding
-    // test if those aspects exist for the given texid, bind them to other texture units if so
-    class texture_manager {
-    public:
-        texture_manager() : textures(64) {};
-        uint32_t add(const uint8_t* buf, unsigned w, unsigned h) { return textures.insert_any(texgen(buf, w, h)); }
-        void use(size_t index) { glBindTexture(GL_TEXTURE_2D, textures[index]); }
-    private:
-        marked_vector<uint32_t> textures;
-
-        uint32_t texgen(const uint8_t* buf, unsigned width, unsigned height) {
-            // generate a texture object, and set some properties
-            // we want to clamp sampling to not wrap-around, and use nearest-neighbor sampling
-            uint32_t texid = 0;
-            glGenTextures(1, &texid);
-            glBindTexture(GL_TEXTURE_2D, texid);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            // this call is a fucking whirlwind, good luck!
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, buf);
-            return texid;
-        }
-    };
-
-
-    // Class to facilitate sprite batching
-    struct batcher {
-        batcher() {
-            glGenBuffers(1, &vbo_id);
-            glBindBuffer(GL_ARRAY_BUFFER, vbo_id);
-            lock();
-        }
-
-        size_t size() { return batched; }
-        size_t capacity() { return 4096; }
-
-        // returns the number of vertices left unread
-        size_t add(vertex* in, size_t num_verts) {
-            size_t verts_to_copy = std::min(num_verts, capacity() - batched);
-            memcpy(buf + batched, in, verts_to_copy * sizeof(vertex));
-            batched += verts_to_copy;
-            return num_verts - verts_to_copy;
-        }
-        void lock()  {
-            glBufferData(GL_ARRAY_BUFFER, capacity() * sizeof(vertex), nullptr, GL_STREAM_DRAW);
-            buf = (vertex*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-            batched = 0;
-        }
-        void release() { glUnmapBuffer(GL_ARRAY_BUFFER); }
-    private:
-        vertex* buf = nullptr;
-        size_t batched = 0;
-        uint32_t vbo_id = 0;
-        uint32_t vao_id = 0;
-    };
-
-
-    class camera_manager {
-    public:
-        void set_attr_idx(uint32_t attr_idx) { cam_attr_idx = attr_idx; }
-        void set_camera(vec2<float> pos) {
-            sprite_mat[12] = -1.0f + (pos.x * sprite_mat[0]);
-            sprite_mat[13] = 1.0f +  (pos.y * sprite_mat[5]);
-        }
-        void set_res(vec2<uint16_t> res) {
-            glViewport(0, 0, res.x, res.y);
-            sprite_mat[0] = 2.0f / float(res.x);
-            sprite_mat[5] = -2.0f / float(res.y);
-
-            ui_mat[0] = 2.0f / float(res.x);
-            ui_mat[5] = -2.0f / float(res.y);
-
-            // UI camera never moves, update translation values here instead
-            ui_mat[12] = -1;
-            ui_mat[13] = 1;
-        }
-
-        void use_sprite_cam() { use_cam(sprite_mat.data()); }
-        void use_ui_cam() { use_cam(ui_mat.data()); }
-    private:
-        void use_cam(float* data) {
-            glUniformMatrix4fv(cam_attr_idx, 1, GL_FALSE, data);
-        }
-
-        uint32_t cam_attr_idx = 0;
-        vec2<float> res_scale;
-        std::array<float, 16> sprite_mat = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,};
-        std::array<float, 16> ui_mat;
-    };
-
-
-class handle {
+#include <libpng/png.h>
+#include <cassert>
+// both this and the SDL window class should prevent copying or moving, copy over the support class eventually
+// I bet you there's a bug that occurs on subsequent calls to read_image  :)
+class png_reader {
 public:
-    handle();
+	png_reader(const char* filename) {
+		fp = fopen(filename, "rb");
+		assert(fp);
+		char header[8]; // 8 is the maximum size that can be checked
+		fread(header, 1, 8, fp);  // This advances the read pointer - do not remove
+
+		png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+		info_ptr = png_create_info_struct(png_ptr);
+
+		png_init_io(png_ptr, fp);
+		png_set_sig_bytes(png_ptr, 8);
+		png_read_info(png_ptr, info_ptr);
+		png_read_update_info(png_ptr, info_ptr);
+	}
+	~png_reader() {
+		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+		fclose(fp);
+	}
+
+	size_t width() { return png_get_image_width(png_ptr, info_ptr); }
+	size_t height() { return png_get_image_height(png_ptr, info_ptr); }
+	size_t lenbytes() { return height() * rowbytes(); }
+	size_t read_image(uint8_t* buf) {
+		// What in the actual fuck is this? thanks libpng
+		std::vector<png_byte*> ptr_storage(height());
+		for (int y = 0; y < height(); y++) {
+			ptr_storage[y] = buf + (rowbytes() * y);
+		}
+		png_read_image(png_ptr, ptr_storage.data());
+		return lenbytes();
+	}
+private:
+	size_t rowbytes() { return png_get_rowbytes(png_ptr, info_ptr); }
+
+	FILE* fp = nullptr;
+	png_struct* png_ptr = nullptr;
+	png_info* info_ptr = nullptr;
+};
+
+
+// it's possible to use the "use" function to abstract away normal/height map binding
+// test if those aspects exist for the given texid, bind them to other texture units if so
+class texture_manager {
+public:
+    texture_manager() : textures(64) {};
+    uint32_t add(const uint8_t* buf, unsigned w, unsigned h) { return textures.insert_any(texgen(buf, w, h)); }
+    void use(size_t index) { glBindTexture(GL_TEXTURE_2D, textures[index]); }
+private:
+    marked_vector<uint32_t> textures;
+
+    uint32_t texgen(const uint8_t* buf, unsigned width, unsigned height) {
+        // generate a texture object, and set some properties
+        // we want to clamp sampling to not wrap-around, and use nearest-neighbor sampling
+        uint32_t texid = 0;
+        glGenTextures(1, &texid);
+        glBindTexture(GL_TEXTURE_2D, texid);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        // this call is a fucking whirlwind, good luck!
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, buf);
+        return texid;
+    }
+};
+
+
+// Class to facilitate sprite batching
+struct batcher {
+    batcher() {
+        glGenBuffers(1, &vbo_id);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo_id);
+        lock();
+    }
+
+    size_t size() { return batched; }
+    size_t capacity() { return 4096; }
+
+    // returns the number of vertices left unread
+    size_t add(vertex* in, size_t num_verts) {
+        size_t verts_to_copy = std::min(num_verts, capacity() - batched);
+        memcpy(buf + batched, in, verts_to_copy * sizeof(vertex));
+        batched += verts_to_copy;
+        return num_verts - verts_to_copy;
+    }
+    void lock()  {
+        glBufferData(GL_ARRAY_BUFFER, capacity() * sizeof(vertex), nullptr, GL_STREAM_DRAW);
+        buf = (vertex*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+        batched = 0;
+    }
+    void release() { glUnmapBuffer(GL_ARRAY_BUFFER); }
+private:
+    vertex* buf = nullptr;
+    size_t batched = 0;
+    uint32_t vbo_id = 0;
+    uint32_t vao_id = 0;
+};
+
+
+class camera_manager {
+public:
+    void set_attr_idx(uint32_t attr_idx) { cam_attr_idx = attr_idx; }
+    void set_camera(vec2<float> pos) {
+        sprite_mat[12] = -1.0f + (pos.x * sprite_mat[0]);
+        sprite_mat[13] = 1.0f +  (pos.y * sprite_mat[5]);
+    }
+    void set_res(vec2<uint16_t> res) {
+        glViewport(0, 0, res.x, res.y);
+        sprite_mat[0] = 2.0f / float(res.x);
+        sprite_mat[5] = -2.0f / float(res.y);
+
+        ui_mat[0] = 2.0f / float(res.x);
+        ui_mat[5] = -2.0f / float(res.y);
+
+        // UI camera never moves, update translation values here instead
+        ui_mat[12] = -1;
+        ui_mat[13] = 1;
+    }
+
+    void use_sprite_cam() { use_cam(sprite_mat.data()); }
+    void use_ui_cam() { use_cam(ui_mat.data()); }
+private:
+    void use_cam(float* data) {
+        glUniformMatrix4fv(cam_attr_idx, 1, GL_FALSE, data);
+    }
+
+    uint32_t cam_attr_idx = 0;
+    vec2<float> res_scale;
+    std::array<float, 16> sprite_mat = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,};
+    std::array<float, 16> ui_mat;
+};
+
+
+class renderer {
+public:
+    renderer();
     void render();
 
     void draw_batch();
 
     uint32_t program_id;
     uint32_t ebo_id;
-    std::vector<sprite> sprites;
+	marked_vector<spritedata> sprites;
 
     camera_manager camera;
     batcher batch;
@@ -122,28 +170,6 @@ public:
 
 
 
-
-
-
-
-
-
-
-
-    handle* alloc() { return new handle; }
-    void free(handle* r) { delete r; }
-    void draw(handle* r) {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        r->render();
-    }
-    void glew_init() { glewInit(); }
-
-    uint32_t add_tex(handle* r, const uint8_t* buf, unsigned w, unsigned h) { return r->textures.add(buf, w, h); }
-    void add_sprite(handle* r, const sprite& s) { r->sprites.emplace_back(s); }
-    void clear_sprites(handle* r) { r->sprites.clear(); }
-
-    void set_cam(handle* r, float cam_x, float cam_y) { r->camera.set_camera(vec2<float>(cam_x, cam_y)); }
-    void set_res(handle* r, uint16_t cam_x, uint16_t cam_y) { r->camera.set_res(vec2<uint16_t>(cam_x, cam_y)); }
 
 
 
@@ -219,7 +245,7 @@ void GLAPIENTRY MessageCallback(GLenum source, GLenum type, GLuint id, GLenum se
 
 
 
-handle::handle() {
+renderer::renderer() {
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(MessageCallback, 0);
 
@@ -249,22 +275,22 @@ handle::handle() {
 }
 
 
-void handle::draw_batch() {
+void renderer::draw_batch() {
     batch.release();
     //glDrawArrays(GL_TRIANGLES, 0, 6);
     glDrawElements(GL_TRIANGLES, (batch.size() / 4) * 6, GL_UNSIGNED_SHORT, (void*) 0);
     batch.lock();
 }
 
-void handle::render() {
+void renderer::render() {
     camera.use_sprite_cam();
-    for (auto& sprite : sprites) {
+    for (auto& s : sprites) {
         // if textures are different, draw batch now
 
         size_t total_batched = 0;
-        while (total_batched < sprite.data.size()) {
-            size_t to_batch = sprite.data.size() - total_batched;
-            size_t remaining = batch.add(sprite.data.data() + total_batched, to_batch);
+        while (total_batched < s.data.size()) {
+            size_t to_batch = s.data.size() - total_batched;
+            size_t remaining = batch.add(s.data.data() + total_batched, to_batch);
             total_batched += to_batch - remaining;
 
             if (remaining > 0) {
@@ -280,7 +306,91 @@ void handle::render() {
 
 
 
+
+
+
+renderer* renderer_alloc() { return new renderer; }
+void renderer_free(renderer* r) { delete r; }
+void initglew() { glewInit(); }
+
+sprite addsprite(renderer* r, uint16_t numquads) {
+	spritedata s;
+	s.data.resize(numquads * 4);
+	return r->sprites.insert_any(s);
 }
+
+void deletesprite(renderer* r, sprite s) { r->sprites.remove(s); }
+
+
+
+void draw(renderer* r) {
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    r->render();
+}
+texture addtex(renderer* r, const uint8_t* buf, unsigned w, unsigned h) { return r->textures.add(buf, w, h); }
+
+
+texture addtex(renderer* r, const char* filename) {
+	// load img data here
+	uint8_t buffer[256 * 256 * 4];
+	png_reader reader(filename);
+	size_t image_len = reader.read_image(buffer);
+	return addtex(r, buffer, reader.width(), reader.height());
+}
+
+void set_cam(renderer* r, float cam_x, float cam_y) { r->camera.set_camera(vec2<float>(cam_x, cam_y)); }
+void set_res(renderer* r, uint16_t cam_x, uint16_t cam_y) { r->camera.set_res(vec2<uint16_t>(cam_x, cam_y)); }
+
+
+
+// sprite manipulation functions
+vec2<uint16_t> getsize(renderer* eng, sprite s, uint16_t quad) {
+	spritedata& spr = eng->sprites[s];
+	uint16_t w = spr.data[quad * 4 + 3].pos.x - spr.data[quad * 4].pos.x;
+	uint16_t h = spr.data[quad * 4 + 3].pos.y - spr.data[quad * 4].pos.y;
+	return vec2<uint16_t>(w, h);
+}
+
+void moveto(renderer* eng, sprite s, uint16_t x, uint16_t y) {
+	vec2<uint16_t> origin = eng->sprites[s].data[0].pos;
+	moveby(eng, s, x - origin.x, y - origin.y);
+}
+
+void moveby(renderer* eng, sprite s, int32_t dx, int32_t dy) {
+	spritedata& spr = eng->sprites[s];
+	for (int quad = 0; quad < spr.data.size() / 4; quad++) {
+		vec2<uint16_t> origin = eng->sprites[s].data[quad * 4].pos;
+		vec2<uint16_t> size = getsize(eng, s, quad);
+		setbounds(eng, s, quad, origin.x + dx, origin.y + dy, size.x, size.y);
+	}
+}
+
+void setsize(renderer* eng, sprite s, uint16_t quad, uint16_t w, uint16_t h) {
+	vec2<uint16_t> origin = eng->sprites[s].data[quad * 4].pos;
+	setbounds(eng, s, quad, origin.x, origin.y, w, h);
+}
+
+void setbounds(renderer* eng, sprite s, uint16_t quad, uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
+	spritedata& spr = eng->sprites[s];
+	spr.data[quad * 4].pos = vec2<uint16_t>{x, y};
+	spr.data[quad * 4 + 1].pos = vec2<uint16_t>{x + w, y}; 
+	spr.data[quad * 4 + 2].pos = vec2<uint16_t>{x, y + h};
+	spr.data[quad * 4 + 3].pos = vec2<uint16_t>{x + w, y + h};
+}
+
+void setuv(renderer* eng, sprite s, uint16_t quad, float x, float y, float w, float h) {
+	spritedata& spr = eng->sprites[s];
+	spr.data[quad * 4].uv = vec2<float>{x, y};
+	spr.data[quad * 4 + 1].uv = vec2<float>{x + w, y}; 
+	spr.data[quad * 4 + 2].uv = vec2<float>{x, y + h};
+	spr.data[quad * 4 + 3].uv = vec2<float>{x + w, y + h}; 
+}
+
+void settex(renderer* eng, sprite s, texture texid) {
+	eng->sprites[s].tex_id = texid;
+}
+
+
 
 
 

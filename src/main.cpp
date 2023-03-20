@@ -5,7 +5,6 @@
 
 #include <engine/engine.h>
 #include <interpreter.h>
-#include <parser.h>
 #include <cassert>
 
 #include <cstring>
@@ -13,15 +12,25 @@
 
 
 #include <common/stopwatch.h>
+#include <parser.h>
 
+int main() {
 
-int main2() {
+	engine* e = alloc_engine();
+	texture tex_id = addtex(get_renderer(e), "test.png");
 
-    engine* e = alloc_engine();
-    uint32_t tex_id = load_tex(e, "test.png");
+	interpreter interp;
+	interp.e = e;
 
-    interpreter interp;
-    interp.e = e;
+	const char* buf[256];
+	auto maps_dict = dsl::parser::parse_file("fuck.txt");
+	for (auto& [key, val] : maps_dict->data()) {
+		const auto* l = reinterpret_cast<const dsl::function*>(val.get());
+		for (size_t i = 0; i < l->num_commands(); i++) {
+			buf[i] = l->read_command(i);
+		}
+		loadscript(e, key.c_str(), l->num_commands(), buf);
+	}
 
 	char buffer[1024];
 	for (;;) {
@@ -31,28 +40,22 @@ int main2() {
 		}
 	}
 
-    free_engine(e);
+	free_engine(e);
 }
 
 
 
-int main() {
-    engine* e = alloc_engine();
-    uint32_t tex_id = load_tex(e, "test.png");
+int main2() {
+	engine* e = alloc_engine();
+	texture tex_id = addtex(get_renderer(e), "test.png");
 
-    interpreter interp;
-    interp.e = e;
-
-    auto maps_dict = dsl::parser::parse_file("fuck.txt");
-    for (auto& [key, val] : maps_dict->data()) {
-	const auto* l = reinterpret_cast<const dsl::function*>(val.get());
-	for (size_t i = 0; i < l->num_commands(); i++) {
-            interp.exec(l->read_command(i));
-	}
-        printf("test!");
-    }
+	interpreter interp;
+	interp.e = e;
 
 
+
+	run(e, "bruh");	
+	
 
 	stopwatch t;
 	stopwatch fpscounter;
@@ -61,28 +64,28 @@ int main() {
 
 	t.start();
 
-    while (1) {
-        int ms_per_frame = 1000000 / 60; 
-        lag += t.elapsed<stopwatch::microseconds>();
+	while (1) {
+		int ms_per_frame = 1000000 / 60; 
+		lag += t.elapsed<stopwatch::microseconds>();
 		t.start();
 
-        if(!poll_events(e))
-            break;
+		if(!poll_events(e))
+			break;
 
-        if (fpscounter.elapsed<stopwatch::seconds>() >= 1.0 ) {
-            printf("%f ms/frame\n", 1000.0f / double(numframes));
-            numframes = 0;
-            fpscounter.start();
-        }
+		if (fpscounter.elapsed<stopwatch::seconds>() >= 1.0 ) {
+			printf("%f ms/frame\n", 1000.0f / double(numframes));
+			numframes = 0;
+			fpscounter.start();
+		}
 
-        while (lag >= stopwatch::microseconds(ms_per_frame).count()) {
-            run_tick(e);
-            lag -= stopwatch::microseconds(ms_per_frame).count();
-        }
+		while (lag >= stopwatch::microseconds(ms_per_frame).count()) {
+			run_tick(e);
+			lag -= stopwatch::microseconds(ms_per_frame).count();
+		}
 
 		numframes++;
-        render(e);
-    }
+		render(e);
+	}
 
-    free_engine(e);
+	free_engine(e);
 }

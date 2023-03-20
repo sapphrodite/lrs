@@ -15,7 +15,7 @@ namespace ecs{
 
 			for (auto& d : dpy) {
 				for (auto& s : d.sprites) {
-					moveby(e, s, p.velocity.x, p.velocity.y);
+					moveby(get_renderer(e), s, p.velocity.x, p.velocity.y);
 				}
 			}	
 		}

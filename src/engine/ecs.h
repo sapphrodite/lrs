@@ -20,9 +20,9 @@ namespace ecs {
 	};
 
     struct physics : public component {
-        vec2<int> velocity_cap;
-        vec2<int> accel;
-        vec2<int> velocity;
+        vec2<float> velocity_cap;
+        vec2<float> accel;
+        vec2<float> velocity;
     };
 
     template <typename T>
@@ -79,10 +79,10 @@ namespace ecs {
             ALL_COMPONENTS(GENERATE_REMOVE_CALLS)
         }
     private:
-	void resize(size_t new_size) {
+		void resize(size_t new_size) {
             entities.resize(new_size);
             ALL_COMPONENTS(GENERATE_RESIZE_CALLS)
-	}
+		}
         bitvector entities;
         ALL_COMPONENTS(GENERATE_ACCESS_FUNCTIONS)
         ALL_COMPONENTS(GENERATE_POOLS)
