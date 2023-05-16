@@ -1,6 +1,8 @@
 #include "engine.h"
 #include "ecs.h"
 #include "modules.h"
+#include <interpreter.h>
+#include <common/coordinate_types.h>
 
 #include <cstring>
 #include <cassert>
@@ -43,6 +45,7 @@ public:
 
 	void run_tick() {
 		ecs::run_physics(this, components.get_pool<ecs::display>(), components.get_pool<ecs::physics>());
+		ecs::run_collision(components.get_pool<ecs::collision>());
 	};
 
 	// these should be shoved in private, once i properly interface them
@@ -60,9 +63,6 @@ public:
 
 engine* alloc_engine() { return new engine; }
 void free_engine(engine* e) { delete e; }
-
-
-
 bool poll_events(engine* e) {
 	window_event wev;
 	while (poll_events(e->w, &wev)) {
@@ -78,13 +78,9 @@ bool poll_events(engine* e) {
 	}
 	return 1;
 }
+
 void run_tick(engine* e) { e->run_tick(); }
 void render(engine* e) { e->render(); }
-
-
-
-
-
 
 
 sprite addentity(engine* eng) {
@@ -93,7 +89,7 @@ sprite addentity(engine* eng) {
 	return e;
 }
 
-sprite addsprite(engine* eng, entity e, uint16_t numquads) { 
+sprite addsprite(engine* eng, entity e, uint16_t numquads) {
 	size_t sprid = addsprite(eng->r, numquads);
 	eng->components.get<ecs::display>(e).sprites.emplace_back(sprid);
 	return sprid;
@@ -111,12 +107,12 @@ void deserialize(vec2<float>& out, int argc, char** argv) {
 	out = vec2<float>{std::stof(argv[0]), std::stof(argv[1])};
 }
 
+void addcomponent(engine* eng, entity e, const char* name) {
 #define GENERATE_STRCMP_CALLS(T) \
 	else if (strcmp(#T, name) == 0) { \
 		eng->components.add<ecs::T>(e); \
 	}
 
-void addcomponent(engine* eng, entity e, const char* name) {
 	if (!eng) {}
 	ALL_COMPONENTS(GENERATE_STRCMP_CALLS)
 }
@@ -129,21 +125,76 @@ void setattr(engine* eng, entity e, const char* attr, int argc, char** argv) {
 	}
 }
 
+void delta_hb(std::array<vec2<uint16_t>, 4>& hb, int* mat) {
+	mat3<int> tfmat;
+	memcpy(tfmat.data, mat, 9 * sizeof(int));
+	for (auto& vert : hb) {
+		vec2<int> res = tfmat * vert.to<int>();
+		vert = res.to<uint16_t>();
+	}
+}
 
 
+void applydelta(engine* eng, entity e, sprite s, int* mat) {
+	if (eng->components.exists<ecs::collision>(e)) {
+		auto& col = eng->components.get<ecs::collision>(e);
+		for (auto& hb : col.hitboxes)
+			delta_hb(hb, mat);
+	}
 
-renderer* get_renderer(engine* eng) { return eng->r; }
+	apply_tf(eng->r, s, mat);
+}
 
-#include <interpreter.h>
+// sprite manipulation functions
+void moveto(engine* eng, entity e, sprite s, int x, int y) {
+	uint16_t ox = 0, oy = 0;
+	get_origin(eng->r, s, &ox, &oy);
+	moveby(eng, e, s, x - ox, y - oy);
+}
+
+void moveby(engine* eng, entity e, sprite s, int dx, int dy) {
+	mat3<int> tfmat = mat3<int>::identity();
+	tfmat.data[2] = dx;
+	tfmat.data[5] = dy;
+	applydelta(eng, e, s, tfmat.data);
+}
+void setbounds(engine* e, sprite s, uint16_t quad, int x, int y, int w, int h) {
+	setbounds(e->r, s, quad, x, y, w, h);
+}
+void setuv(engine* e, sprite s, uint16_t quad, float tlx, float tly, float w, float h) {
+	setuv(e->r, s, quad, tlx, tly, w, h);
+}
+void settex(engine* e, sprite s, texture t) { settex(e->r, s, t); }
 
 
+void addhitbox(engine* eng, entity e, int x, int y, int w, int h) {
+	if (!eng->components.exists<ecs::collision>(e))
+		eng->components.add<ecs::collision>(e);
+
+	auto& col = eng->components.get<ecs::collision>(e);
+	ecs::collision::hitbox hb;
+	hb[0] = vec2<uint16_t>{x, y};
+	hb[1] = vec2<uint16_t>{x + w, y};
+	hb[2] = vec2<uint16_t>{x, y + h};
+	hb[3] = vec2<uint16_t>{x + w, y + h};
+	col.hitboxes.emplace_back(hb);
+}
+
+
+texture addtex(engine* e, const uint8_t* buf, unsigned w, unsigned h) {
+	 return addtex(e->r, buf, w, h);
+}
+
+texture addtex(engine* e, const char* filename) {
+	return addtex(e->r, filename);
+}
 
 
 void loadscript(engine* eng, const char* name, int argc, const char** argv) {
 	std::vector<std::string> function;
 	for (int i = 0; i < argc; i++) {
 		function.emplace_back(std::string(argv[i]));
-	}	
+	}
 
 	eng->functions.insert({name, function});
 }

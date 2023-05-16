@@ -19,26 +19,26 @@ const char* interpreter::exec(const char* cmdin) {
 	} else if (strcmp(cmd, "addsprite") == 0) {
 		sprintf(output, "%i", addsprite(e, argtoi(0), argtoi(1)));
 	} else if (strcmp(cmd, "moveto") == 0) {
-		moveto(get_renderer(e), argtoi(0), argtoi(1), argtoi(2));
-	} else if (strcmp(cmd, "setsize") == 0) {
-		setsize(get_renderer(e), argtoi(0), argtoi(1), argtoi(2), argtoi(3));
+		moveto(e, argtoi(0), argtoi(1), argtoi(2), argtoi(3));
 	} else if (strcmp(cmd, "setbounds") == 0) {
-		setbounds(get_renderer(e), argtoi(0), argtoi(1), argtoi(2), argtoi(3), argtoi(4), argtoi(5));
+		setbounds(e, argtoi(0), argtoi(1), argtoi(2), argtoi(3), argtoi(4), argtoi(5));
 	} else if (strcmp(cmd, "setuv") == 0) {
-		setuv(get_renderer(e), argtoi(0), argtoi(1), argtof(2), argtof(3), argtof(4), argtof(5));
+		setuv(e, argtoi(0), argtoi(1), argtof(2), argtof(3), argtof(4), argtof(5));
 	} else if (strcmp(cmd, "settex") == 0) {
-		settex(get_renderer(e), argtoi(0), argtoi(1));
+		settex(e, argtoi(0), argtoi(1));
+	} else if (strcmp(cmd, "addhitbox") == 0) {
+		addhitbox(e, argtoi(0), argtoi(1), argtoi(2), argtoi(3), argtoi(4));
 	} else if (strcmp(cmd, "setattr") == 0) {
 		std::array<char*, 256> ptrarr;
-		int attr_args = argc - argoffset - 1; // first two are the entity and attr name 
+		int attr_args = argc - argoffset - 1; // first two are the entity and attr name
 		for (int i = 0; i < attr_args; i++) {
 			ptrarr[i] = getarg(i + 2);
 		}
 		setattr(e, argtoi(0), getarg(1), attr_args, ptrarr.data());
 	} else if (strcmp(cmd, "addcomponent") == 0) {
-		addcomponent(e, argtoi(0), getarg(1)); 
+		addcomponent(e, argtoi(0), getarg(1));
 	} else if (strcmp(cmd, "run") == 0) {
-		run(e, getarg(0)); 
+		run(e, getarg(0));
 	} else {
 		printf("Unrecognized command: %s\n", cmd);
 	}

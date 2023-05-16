@@ -14,10 +14,14 @@
 #include <common/stopwatch.h>
 #include <parser.h>
 
-int main() {
+#include <common/coordinate_types.h>
+int main1() {
+
+	vec2<int> fuck(1, 0);
+	vec2<int> bruh(0, 1);
 
 	engine* e = alloc_engine();
-	texture tex_id = addtex(get_renderer(e), "test.png");
+	texture tex_id = addtex(e, "test.png");
 
 	interpreter interp;
 	interp.e = e;
@@ -44,18 +48,24 @@ int main() {
 }
 
 
-
-int main2() {
+int main() {
 	engine* e = alloc_engine();
-	texture tex_id = addtex(get_renderer(e), "test.png");
+	texture tex_id = addtex(e, "test.png");
 
 	interpreter interp;
 	interp.e = e;
 
+	const char* buf[256];
+	auto maps_dict = dsl::parser::parse_file("fuck.txt");
+	for (auto& [key, val] : maps_dict->data()) {
+		const auto* l = reinterpret_cast<const dsl::function*>(val.get());
+		for (size_t i = 0; i < l->num_commands(); i++) {
+			buf[i] = l->read_command(i);
+		}
+		loadscript(e, key.c_str(), l->num_commands(), buf);
+	}
 
-
-	run(e, "bruh");	
-	
+	run(e, "bruh");
 
 	stopwatch t;
 	stopwatch fpscounter;
@@ -65,7 +75,7 @@ int main2() {
 	t.start();
 
 	while (1) {
-		int ms_per_frame = 1000000 / 60; 
+		int ms_per_frame = 1000000 / 60;
 		lag += t.elapsed<stopwatch::microseconds>();
 		t.start();
 

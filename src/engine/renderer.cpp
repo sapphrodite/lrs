@@ -351,47 +351,46 @@ vec2<uint16_t> getsize(renderer* eng, sprite s, uint16_t quad) {
 	return vec2<uint16_t>(w, h);
 }
 
-void moveto(renderer* eng, sprite s, uint16_t x, uint16_t y) {
-	vec2<uint16_t> origin = eng->sprites[s].data[0].pos;
-	moveby(eng, s, x - origin.x, y - origin.y);
-}
-
 void moveby(renderer* eng, sprite s, int32_t dx, int32_t dy) {
 	spritedata& spr = eng->sprites[s];
-	for (int quad = 0; quad < spr.data.size() / 4; quad++) {
-		vec2<uint16_t> origin = eng->sprites[s].data[quad * 4].pos;
-		vec2<uint16_t> size = getsize(eng, s, quad);
-		setbounds(eng, s, quad, origin.x + dx, origin.y + dy, size.x, size.y);
-	}
 }
 
-void setsize(renderer* eng, sprite s, uint16_t quad, uint16_t w, uint16_t h) {
-	vec2<uint16_t> origin = eng->sprites[s].data[quad * 4].pos;
-	setbounds(eng, s, quad, origin.x, origin.y, w, h);
-}
 
-void setbounds(renderer* eng, sprite s, uint16_t quad, uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
-	spritedata& spr = eng->sprites[s];
+void setbounds(renderer* r, sprite s, uint16_t quad, int x, int y, int w, int h) {
+	spritedata& spr = r->sprites[s];
 	spr.data[quad * 4].pos = vec2<uint16_t>{x, y};
-	spr.data[quad * 4 + 1].pos = vec2<uint16_t>{x + w, y}; 
+	spr.data[quad * 4 + 1].pos = vec2<uint16_t>{x + w, y};
 	spr.data[quad * 4 + 2].pos = vec2<uint16_t>{x, y + h};
 	spr.data[quad * 4 + 3].pos = vec2<uint16_t>{x + w, y + h};
 }
 
-void setuv(renderer* eng, sprite s, uint16_t quad, float x, float y, float w, float h) {
-	spritedata& spr = eng->sprites[s];
+void setuv(renderer* r, sprite s, uint16_t quad, float x, float y, float w, float h) {
+	spritedata& spr = r->sprites[s];
 	spr.data[quad * 4].uv = vec2<float>{x, y};
-	spr.data[quad * 4 + 1].uv = vec2<float>{x + w, y}; 
+	spr.data[quad * 4 + 1].uv = vec2<float>{x + w, y};
 	spr.data[quad * 4 + 2].uv = vec2<float>{x, y + h};
-	spr.data[quad * 4 + 3].uv = vec2<float>{x + w, y + h}; 
+	spr.data[quad * 4 + 3].uv = vec2<float>{x + w, y + h};
 }
 
-void settex(renderer* eng, sprite s, texture texid) {
-	eng->sprites[s].tex_id = texid;
+void settex(renderer* r, sprite s, texture texid) {
+	r->sprites[s].tex_id = texid;
 }
 
 
 
+void apply_tf(renderer* r, sprite s, int* mat) {
+	spritedata& spr = r->sprites[s];
+	mat3<int> tfmat;
+	memcpy(tfmat.data, mat, 9 * sizeof(int));
+	for (auto& vert : spr.data) {
+		vec2<int> res = tfmat * vec2<int>{vert.pos.x, vert.pos.y};
+		vert.pos = vec2<uint16_t>{res.x, res.y};
+	}
+};
 
-
+void get_origin(renderer* r, sprite s, uint16_t* x, uint16_t* y) {
+	spritedata& spr = r->sprites[s];
+	*x = spr.data.front().pos.x;
+	*y = spr.data.front().pos.y;
+}
 

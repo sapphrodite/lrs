@@ -2,64 +2,43 @@
 #define ENGINE_H
 
 #include <stdint.h>
-#include "typedefs.h"
 
 class engine;
-class renderer;
-class audio;
-class window;
 
 using entity = uint16_t;
 using sprite = uint16_t;
 using texture = uint16_t;
-using trackid = uint16_t;
-using stream_id = uint8_t;
-
-
-enum class sink_channel {
-    music, effects, master
-};
-
-renderer* get_renderer(engine*);
-audio* get_audio(engine*);
 
 engine* alloc_engine();
-void free_engine(engine* e);
+void free_engine(engine*);
 bool poll_events(engine*);
 
-
-
 void run_tick(engine*);
-void render(engine* e);
+void render(engine*);
 
 entity addentity(engine*);
 sprite addsprite(engine*, entity, uint16_t numquads);
 void addcomponent(engine*, entity, const char* name);
 void setattr(engine*, entity, const char* attr, int argv, char** argc);
 
-texture addtex(renderer*, const char* filename);
 
 // sprite manipulation functions
-void moveto(renderer*, sprite, uint16_t x, uint16_t y);
-void moveby(renderer*, sprite, int dx, int dy);
-void setsize(renderer*, sprite, uint16_t quad, uint16_t w, uint16_t h);
-void setbounds(renderer*, sprite, uint16_t quad, uint16_t x, uint16_t y, uint16_t w, uint16_t h);
-void setuv(renderer*, sprite, uint16_t quad, float tlx, float tly, float w, float y);
-void settex(renderer*, sprite, texture);
+void moveto(engine*, entity, sprite, int x, int y);
+void moveby(engine*, entity, sprite, int dx, int dy);
+void setsize(engine*, sprite, uint16_t quad, int w, int h);
+void setbounds(engine*, sprite, uint16_t quad, int x, int y, int w, int h);
+void setuv(engine*, sprite, uint16_t quad, float tlx, float tly, float w, float y);
+void settex(engine*, sprite, texture);
 
 
-
-stream_id play_track(audio*, uint32_t track_id);
-void stop_stream(audio*, stream_id track);
-void set_channel_volume(audio*, sink_channel channel, float volume);
+void addhitbox(engine*, entity, int x1, int y1, int x2, int y2);
 
 
-void run(engine* e, const char* scriptname);
-
+void run(engine*, const char* scriptname);
 
 // non-scriptable functions
-texture addtex(renderer*, const uint8_t* buf, unsigned w, unsigned h);
+texture addtex(engine*, const uint8_t* buf, unsigned w, unsigned h);
+texture addtex(engine*, const char* filename);
 void loadscript(engine* e, const char* name, int argc, const char** argv);
-
 
 #endif //ENGINE_H
