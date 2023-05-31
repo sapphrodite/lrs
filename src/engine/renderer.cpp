@@ -378,12 +378,12 @@ void settex(renderer* r, sprite s, texture texid) {
 
 
 
-void apply_tf(renderer* r, sprite s, int* mat) {
+void apply_tf(renderer* r, sprite s, float* mat) {
 	spritedata& spr = r->sprites[s];
-	mat3<int> tfmat;
-	memcpy(tfmat.data, mat, 9 * sizeof(int));
+	mat3<float> tfmat;
+	memcpy(tfmat.data, mat, 9 * sizeof(float));
 	for (auto& vert : spr.data) {
-		vec2<int> res = tfmat * vec2<int>{vert.pos.x, vert.pos.y};
+		vec2<float> res = tfmat * vec2<float>{vert.pos.x, vert.pos.y};
 		vert.pos = vec2<uint16_t>{res.x, res.y};
 	}
 };

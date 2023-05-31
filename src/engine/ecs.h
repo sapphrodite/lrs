@@ -19,9 +19,15 @@ namespace ecs {
 	};
 
     struct physics : public component {
-        vec2<float> velocity_cap;
-        vec2<float> accel;
+		struct force {
+			vec2<float> f;
+			int lifetime = 0;
+			bool relative = false;
+		};
+		std::vector<force> forces;
+
         vec2<float> velocity;
+		float mass;
     };
 
 	struct collision : public component {

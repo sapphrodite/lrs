@@ -20,7 +20,7 @@ sprite addsprite(renderer*, uint16_t numquads);
 void deletesprite(renderer*, sprite);
 void set_cam(renderer*, float cam_x, float cam_y);
 void set_res(renderer*, uint16_t res_x, uint16_t res_y);
-void apply_tf(renderer*, sprite, int* mat);
+void apply_tf(renderer*, sprite, float* mat);
 void get_origin(renderer*, sprite, uint16_t* x, uint16_t* y);
 void settex(renderer*, sprite, texture);
 void setbounds(renderer*, sprite, uint16_t quad, int x, int y, int w, int h);

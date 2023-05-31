@@ -107,6 +107,11 @@ void deserialize(vec2<float>& out, int argc, char** argv) {
 	out = vec2<float>{std::stof(argv[0]), std::stof(argv[1])};
 }
 
+void deserialize(float& out, int argc, char** argv) {
+	assert(argc == 1);
+	out = std::stof(argv[0]);
+}
+
 void addcomponent(engine* eng, entity e, const char* name) {
 #define GENERATE_STRCMP_CALLS(T) \
 	else if (strcmp(#T, name) == 0) { \
@@ -118,24 +123,24 @@ void addcomponent(engine* eng, entity e, const char* name) {
 }
 
 void setattr(engine* eng, entity e, const char* attr, int argc, char** argv) {
-	if (strcmp("physics.accel", attr) == 0) {
-		deserialize(eng->components.get<ecs::physics>(e).accel, argc, argv);
-	} else if (strcmp("physics.velocity_cap", attr) == 0) {
-		deserialize(eng->components.get<ecs::physics>(e).velocity_cap, argc, argv);
+	if (strcmp("physics.velocity", attr) == 0) {
+		deserialize(eng->components.get<ecs::physics>(e).velocity, argc, argv);
+	} else if (strcmp("physics.mass", attr) == 0) {
+		deserialize(eng->components.get<ecs::physics>(e).mass, argc, argv);
 	}
 }
 
-void delta_hb(std::array<vec2<uint16_t>, 4>& hb, int* mat) {
-	mat3<int> tfmat;
-	memcpy(tfmat.data, mat, 9 * sizeof(int));
+void delta_hb(std::array<vec2<uint16_t>, 4>& hb, float* mat) {
+	mat3<float> tfmat;
+	memcpy(tfmat.data, mat, 9 * sizeof(float));
 	for (auto& vert : hb) {
-		vec2<int> res = tfmat * vert.to<int>();
+		vec2<float> res = tfmat * vert.to<float>();
 		vert = res.to<uint16_t>();
 	}
 }
 
 
-void applydelta(engine* eng, entity e, sprite s, int* mat) {
+void applydelta(engine* eng, entity e, sprite s, float* mat) {
 	if (eng->components.exists<ecs::collision>(e)) {
 		auto& col = eng->components.get<ecs::collision>(e);
 		for (auto& hb : col.hitboxes)
@@ -143,6 +148,13 @@ void applydelta(engine* eng, entity e, sprite s, int* mat) {
 	}
 
 	apply_tf(eng->r, s, mat);
+}
+
+void rotate(engine* eng, entity e, sprite s, int deg) {
+	uint16_t ox = 0, oy = 0;
+	get_origin(eng->r, s, &ox, &oy);
+	mat3<float> tfmat = mat3<float>::rotation(deg, vec2<float>(ox, oy));
+	applydelta(eng, e, s, tfmat.data);
 }
 
 // sprite manipulation functions
@@ -153,7 +165,7 @@ void moveto(engine* eng, entity e, sprite s, int x, int y) {
 }
 
 void moveby(engine* eng, entity e, sprite s, int dx, int dy) {
-	mat3<int> tfmat = mat3<int>::identity();
+	mat3<float> tfmat = mat3<float>::identity();
 	tfmat.data[2] = dx;
 	tfmat.data[5] = dy;
 	applydelta(eng, e, s, tfmat.data);
@@ -180,6 +192,14 @@ void addhitbox(engine* eng, entity e, int x, int y, int w, int h) {
 	col.hitboxes.emplace_back(hb);
 }
 
+void addforce(engine* eng, entity e, float x, float y, int lifetime, bool relative) {
+	if (!eng->components.exists<ecs::physics>(e))
+		throw std::runtime_error("cannot add force to entity without physics");
+
+	auto& phy = eng->components.get<ecs::physics>(e);
+	ecs::physics::force f{vec2<float>(x, y), lifetime, relative};
+	phy.forces.emplace_back(f);
+}
 
 texture addtex(engine* e, const uint8_t* buf, unsigned w, unsigned h) {
 	 return addtex(e->r, buf, w, h);

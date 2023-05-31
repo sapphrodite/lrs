@@ -29,9 +29,11 @@ void setsize(engine*, sprite, uint16_t quad, int w, int h);
 void setbounds(engine*, sprite, uint16_t quad, int x, int y, int w, int h);
 void setuv(engine*, sprite, uint16_t quad, float tlx, float tly, float w, float y);
 void settex(engine*, sprite, texture);
+void rotate(engine*, entity, sprite, int deg);
 
 
 void addhitbox(engine*, entity, int x1, int y1, int x2, int y2);
+void addforce(engine*, entity, float x, float y, int lifetime, bool relative);
 
 
 void run(engine*, const char* scriptname);

@@ -14,7 +14,7 @@ const char* interpreter::exec(const char* cmdin) {
 		run_tick(e);
 	} else if (strcmp(cmd, "render") == 0) {
 		render(e);
-	} else if (strcmp(cmd, "addentity") == 0) { 
+	} else if (strcmp(cmd, "addentity") == 0) {
 		sprintf(output, "%i", addentity(e));
 	} else if (strcmp(cmd, "addsprite") == 0) {
 		sprintf(output, "%i", addsprite(e, argtoi(0), argtoi(1)));
@@ -26,8 +26,12 @@ const char* interpreter::exec(const char* cmdin) {
 		setuv(e, argtoi(0), argtoi(1), argtof(2), argtof(3), argtof(4), argtof(5));
 	} else if (strcmp(cmd, "settex") == 0) {
 		settex(e, argtoi(0), argtoi(1));
+	} else if (strcmp(cmd, "rotate") == 0) {
+		rotate(e, argtoi(0), argtoi(1), argtoi(2));
 	} else if (strcmp(cmd, "addhitbox") == 0) {
 		addhitbox(e, argtoi(0), argtoi(1), argtoi(2), argtoi(3), argtoi(4));
+	} else if (strcmp(cmd, "addforce") == 0) {
+		addforce(e, argtoi(0),  argtof(1), argtof(2), argtoi(3), strcmp(getarg(4), "true") == 0);
 	} else if (strcmp(cmd, "setattr") == 0) {
 		std::array<char*, 256> ptrarr;
 		int attr_args = argc - argoffset - 1; // first two are the entity and attr name

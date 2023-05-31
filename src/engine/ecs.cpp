@@ -3,14 +3,43 @@
 #include <algorithm>
 
 namespace ecs {
+	template <typename T> int sgn(T val) {
+	    return (T(0) < val) - (val < T(0));
+	}
 
 	void run_physics(engine* e, pool<display>& dpy, pool<physics>& phys) {
 		for (auto& p : phys) {
+/*			float current_angle = atan2(p.accel.x, p.accel.y);
+			float r = -0.25; // i love hardcoding
+			float accel_angle = current_angle + sgn(r) * (M_PI / 2);
+
+			if (accel_angle != 0) {
+				vec2<float> rot_accel = vec2<float>(abs(r) * cos(accel_angle) + abs(r) * sin(accel_angle));
+				p.accel += rot_accel;
+
+				float new_angle = atan2(p.accel.x, p.accel.y);
+				for (auto& s : dpy[p.entity_id].sprites) {
+					rotate(e, p.entity_id, s, new_angle - current_angle);
+				}
+			}
+
 			p.velocity.x += p.accel.x;
 			p.velocity.y += p.accel.y;
 
+
 		    p.velocity.x = std::clamp(p.velocity.x, -p.velocity_cap.x, p.velocity_cap.x);
-		    p.velocity.y = std::clamp(p.velocity.y, -p.velocity_cap.y, p.velocity_cap.y);
+		    p.velocity.y = std::clamp(p.velocity.y, -p.velocity_cap.y, p.velocity_cap.y);*/
+
+			for (auto& force : p.forces) {
+
+				p.velocity += vec2<float>(force.f.x / p.mass, force.f.y / p.mass);
+
+				if (--force.lifetime == 0) {
+					std::swap(force, p.forces.back());
+					p.forces.erase(p.forces.begin() + p.forces.size() - 1);
+					continue;
+				}
+			}
 
 			for (auto& s : dpy[p.entity_id].sprites) {
 				moveby(e, p.entity_id, s, p.velocity.x, p.velocity.y);

@@ -2,6 +2,7 @@
 #define COORDINATE_TYPES_H
 
 #include <stdint.h>
+#include <math.h>
 
 template <typename T>
 struct vec2 {
@@ -12,6 +13,18 @@ struct vec2 {
 template <typename T>
 struct mat3 {
 	static mat3<T> identity() { return {{1, 0, 0, 0, 1, 0, 0, 0, 1 }}; }
+	static mat3<T> rotation(float deg, vec2<T> origin) {
+		mat3<T> id = identity();
+		float rad = deg * (M_PI / 180);
+		id.data[0] = cos(rad);
+		id.data[1] = -sin(rad);
+		id.data[2] = (-origin.x * cos(rad)) + (origin.y * sin(rad)) + origin.x;
+		id.data[3] = sin(rad);
+		id.data[4] = cos(rad);
+		id.data[5] = (-origin.x * sin(rad)) - (origin.y * cos(rad)) + origin.y;
+
+		return id;
+	}
 	T data[9];
 };
 

@@ -1,10 +1,16 @@
 function bruh {
     $1 = addentity;
     $2 = addsprite $1 1;
-    setbounds $2 0 10 10 16 16;
+    setbounds $2 0 100 100 50 50;
     setuv $2 0 0 0 1 1;
     settex $2 0;
-	addhitbox $1 10 10 16 16;
+	addhitbox $1 100 100 50 50;
+	moveto $1 $2 500 500;
+#	rotate $1 $2 45;
+	moveto $1 $2 225 225;
+    addcomponent $1 physics;
+    setattr $1 physics.mass 1;
+	addforce $1 1 1 1 false;
 
     $3 = addentity;
     $4 = addsprite $3 1;
@@ -12,7 +18,5 @@ function bruh {
     setuv $4 0 0 0 1 1;
     settex $4 0;
 	addhitbox $3 10 90 16 16;
-    addcomponent $3 physics;
-    setattr $3 physics.accel 0 -1;
-    setattr $3 physics.velocity_cap 1 1;
+	moveto $3 $4 245 220;
 }
