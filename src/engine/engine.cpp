@@ -112,6 +112,11 @@ void deserialize(float& out, int argc, char** argv) {
 	out = std::stof(argv[0]);
 }
 
+void deserialize(int& out, int argc, char** argv) {
+	assert(argc == 1);
+	out = std::stof(argv[0]);
+}
+
 void addcomponent(engine* eng, entity e, const char* name) {
 #define GENERATE_STRCMP_CALLS(T) \
 	else if (strcmp(#T, name) == 0) { \
@@ -197,7 +202,7 @@ void addforce(engine* eng, entity e, float x, float y, int lifetime, bool relati
 		throw std::runtime_error("cannot add force to entity without physics");
 
 	auto& phy = eng->components.get<ecs::physics>(e);
-	ecs::physics::force f{vec2<float>(x, y), lifetime, relative};
+	ecs::physics::force f{vec2<int>(x, y), lifetime, relative};
 	phy.forces.emplace_back(f);
 }
 

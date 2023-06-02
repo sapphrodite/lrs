@@ -29,10 +29,11 @@ namespace ecs {
 
 		    p.velocity.x = std::clamp(p.velocity.x, -p.velocity_cap.x, p.velocity_cap.x);
 		    p.velocity.y = std::clamp(p.velocity.y, -p.velocity_cap.y, p.velocity_cap.y);*/
+			int frac = 1 << 6;
+			int air_res = 1 << 13;
 
 			for (auto& force : p.forces) {
-
-				p.velocity += vec2<float>(force.f.x / p.mass, force.f.y / p.mass);
+				p.velocity += force.f / vec2<int>(p.mass, p.mass);
 
 				if (--force.lifetime == 0) {
 					std::swap(force, p.forces.back());
@@ -41,8 +42,22 @@ namespace ecs {
 				}
 			}
 
-			for (auto& s : dpy[p.entity_id].sprites) {
-				moveby(e, p.entity_id, s, p.velocity.x, p.velocity.y);
+			if (p.velocity.x != 0 && p.velocity.y != 0) {
+				vec2<int> v2 = p.velocity * p.velocity;
+				v2 += vec2<int>(air_res, air_res);
+				v2.x = p.velocity.x > 0 ? -v2.x : v2.x;
+				v2.y = p.velocity.y > 0 ? -v2.y : v2.y;
+				addforce(e, p.entity_id, v2.x / air_res, v2.y / air_res, 1, false);
+			}
+
+			p.accum += p.velocity;
+			vec2<int> pix_delta(p.accum.x / frac, p.accum.y / frac);
+			p.accum -= vec2<int>(pix_delta.x * frac, pix_delta.y * frac);
+
+			if (pix_delta.x != 0 && pix_delta.y != 0) {
+				for (auto& s : dpy[p.entity_id].sprites) {
+					moveby(e, p.entity_id, s, pix_delta.x, pix_delta.y);
+				}
 			}
 		}
 	}
