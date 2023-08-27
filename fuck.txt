@@ -1,0 +1,18 @@
+function bruh {
+    $1 = addentity;
+    $2 = addsprite $1 1;
+    setbounds $2 0 10 10 16 16;
+    setuv $2 0 0 0 1 1;
+    settex $2 0;
+	addhitbox $1 10 10 16 16;
+
+    $3 = addentity;
+    $4 = addsprite $3 1;
+    setbounds $4 0 10 90 16 16;
+    setuv $4 0 0 0 1 1;
+    settex $4 0;
+	addhitbox $3 10 90 16 16;
+    addcomponent $3 physics;
+    setattr $3 physics.accel 0 -1;
+    setattr $3 physics.velocity_cap 1 1;
+}
