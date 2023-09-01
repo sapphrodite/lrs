@@ -11,6 +11,7 @@ public:
 	constexpr element& operator[] (size_t id) const { return (element&) data[id]; }
 	constexpr bool exists(size_t id) const { return markers.get(id); }
 	constexpr void remove(size_t id) { markers.clear(id); }
+	constexpr element& insert(size_t id) { return insert(id, element()); }
 	constexpr element& insert(size_t id, const element& e) {
 		data[id] = e;
 		markers.set(id);
@@ -52,6 +53,7 @@ class marked_array : public marked_storage<std::array<element, size>, bitarray<s
 
 template <typename element>
 class marked_vector : public marked_storage<std::vector<element>, bitvector> {
+	using base_t = marked_storage<std::vector<element>, bitvector>;
 public:
 	marked_vector() = default;
 	marked_vector(size_t size) { set_capacity(size); }
@@ -61,6 +63,7 @@ public:
 		this->data.resize(new_size);
 	}
 
+	using base_t::insert;
 	size_t insert(const element& e) {
 		if (this->first_free() == this->data.size())
 			set_capacity(this->data.size() * 2 + 1);
@@ -70,7 +73,6 @@ public:
 		return spot;
 	}
 private:
-	using base_t = marked_storage<std::vector<element>, bitvector>;
 };
 
 #endif //BIT_TYPES_H

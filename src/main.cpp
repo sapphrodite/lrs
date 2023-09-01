@@ -1,4 +1,5 @@
 #include <engine/display.h>
+#include <engine/ecs.h>
 #include <include/stopwatch.h>
 
 int main() {
@@ -17,6 +18,11 @@ int main() {
 	dpy.obj_settex(obj, tex);
 	dpy.tile_setbounds(obj, 0, {10, 10}, {48, 48});
 	dpy.tile_setuv(obj, 0, {0.0, 0.0}, {1.0, 1.0});
+
+	ecs e(&dpy);
+	u8 entity = e.entity_add();
+	e.component_add(entity, "render");
+	e.obj_register(entity, obj);
 
 	while (1) {
 		int us_per_frame = 1000000 / 60;
