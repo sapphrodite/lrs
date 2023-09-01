@@ -4,6 +4,7 @@
 #include <array>
 #include <vector>
 #include <bit>
+#include <cassert>
 #include <cstddef>     // size_t
 #include <cstdint>
 #include <limits>      // std::numeric_limits
@@ -19,6 +20,12 @@ public:
 	void set(size_t idx) { data[element(idx)] |= mask(idx); }
 	void clear(size_t idx) { data[element(idx)] &= ~mask(idx); }
 	void write(size_t idx, int val) { val ? set(idx) : clear(idx); }
+	size_t insert() {
+		size_t idx = first_free();
+		assert(first_free() < capacity());
+		set(first_free());
+		return idx;
+	}
 
 	size_t size() const { return bitscan<std::popcount, scan_all>(0); }
 	constexpr size_t capacity() const { return data.size() * typewidth; }
