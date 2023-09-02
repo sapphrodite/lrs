@@ -17,6 +17,11 @@ public:
 
 	// render functions
 	void obj_register(u8 entity, u16 obj);
+
+	// physics functions
+	void add_force(u8 entity, vec2f f, int lifetime);
+
+	void run_tick();
 private:
 	struct pimpl;
 	pimpl* data;

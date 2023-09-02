@@ -23,6 +23,8 @@ int main() {
 	u8 entity = e.entity_add();
 	e.component_add(entity, "render");
 	e.obj_register(entity, obj);
+	e.component_add(entity, "physics");
+	e.add_force(entity, {0, 1}, 60);
 
 	while (1) {
 		int us_per_frame = 1000000 / 60;
@@ -41,6 +43,7 @@ int main() {
 		}
 
 		while (lag >= us_per_frame) {
+			e.run_tick();
 			lag -= us_per_frame;
 		}
 
